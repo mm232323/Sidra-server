@@ -10,8 +10,9 @@
     "nodemon": "^3.1.7"
   },
   "scripts": {
-    "start": "nodemon app.js",
-    "test": "node app.js"
+    "start": "node app.js",
+    "test": "nodemon app.js",
+    "build": "npm install"
   },
   "author": "Mohammed Qurany Ibrahim",
   "license": "ISC"

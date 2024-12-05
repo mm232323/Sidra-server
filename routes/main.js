@@ -27,6 +27,16 @@ router.post(`/handle_order/:orderState`, (req, res, next) => {
   const state = req.params.orderState;
   PurchasesCol.updateOne({ type: state }, { $push: { orders: order } });
   ordersCol.deleteOne({ id: order.id });
+  if (state === "successed") {
+    const products = order.products;
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      ProductsCol.updateOne(
+        { name: product.name, weight: product.weight },
+        { $inc: { remained: -product.quantity } }
+      );
+    }
+  }
   res.json({ message: "order handled !!!!" });
 });
 
@@ -46,14 +56,10 @@ router.post("/set-product", (req, res, next) => {
   res.json({ message: "product successfully added !!!" });
 });
 
-router.post("/set-charge", (req, res, next) => {
+router.post("/set-charge", async (req, res, next) => {
   const charge = req.body;
+  const products = charge.products;
   ChargesCol.insertOne(charge);
-  res.json({ message: "charge added successfully !!!" });
-});
-
-router.post("/handle-remained-prods", (req, res, next) => {
-  const products = req.body.prods;
   for (let i = 0; i < products.length; i++) {
     const product = products[i];
     ProductsCol.updateOne(
@@ -61,7 +67,27 @@ router.post("/handle-remained-prods", (req, res, next) => {
       { $inc: { stock: product.quantity, remained: product.quantity } }
     );
   }
-  res.json({ message: "remained prods handled successfully !!!" });
+  StaticsCol.updateOne(
+    { name: "سعر الشحنات" },
+    { $inc: { value: charge.totalPrice } }
+  );
+  let totalClientPrice = 0;
+  for (let i = 0; i < products.length; i++) {
+    const product = products[i];
+    const productClientPrice = +(
+      await ProductsCol.findOne({ name: product.name, weight: product.weight })
+    ).price;
+    totalClientPrice += productClientPrice * product.quantity;
+  }
+  StaticsCol.updateOne(
+    { name: "الربح" },
+    { $inc: { value: totalClientPrice } }
+  );
+  StaticsCol.updateOne(
+    { name: "صافي الربح" },
+    { $inc: { value: totalClientPrice - charge.totalPrice } }
+  );
+  res.json({ message: "charge added successfully !!!" });
 });
 
 router.get("/get-charges", async (req, res, next) => {
@@ -87,6 +113,10 @@ router.post("/handle_total_purchases", (req, res, next) => {
   StaticsCol.updateOne(
     { name: "تكاليف زائدة" },
     { $inc: { value: extra_costs } }
+  );
+  StaticsCol.updateOne(
+    { name: "رأس المال" },
+    { $inc: { value: client_price - products_price + extra_costs } }
   );
 });
 
